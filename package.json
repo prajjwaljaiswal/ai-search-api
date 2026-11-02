@@ -1,0 +1,22 @@
+{
+  "name": "codehence-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/launch.js",
+    "test": "node --test test/*.test.js",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "db:check": "node --env-file-if-exists=.env scripts/check-db.js",
+    "db:import-sqlite": "node --env-file-if-exists=.env scripts/import-sqlite.js"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14"
+  }
+}

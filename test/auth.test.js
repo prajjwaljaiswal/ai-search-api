@@ -1,0 +1,32 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {createApp} from '../src/server.js';
+test('merchant sessions, ownership, CSRF, legacy claiming and logout',async t=>{
+ const admin='admin-test-secret-longer-than-24';const app=await createApp({dbPath:':memory:',adminKey:admin,embeddingProvider:null});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(async()=>{await new Promise(r=>app.server.close(r));await app.close()});const base='http://127.0.0.1:'+app.server.address().port;
+ async function call(path,{body,cookie,key,origin=base,method=body===undefined?'GET':'POST'}={}){const r=await fetch(base+path,{method,headers:{Origin:origin,...(cookie?{Cookie:cookie}:{}),...(key?{Authorization:'Bearer '+key}:{}),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0],rawCookie:r.headers.get('set-cookie')}}
+ const a=await call('/account/register',{body:{email:'a@example.com',password:'a-long-password-123'}});assert.equal(a.status,201);assert.match(a.rawCookie,/HttpOnly/);assert.match(a.rawCookie,/SameSite=Strict/);
+ assert.equal((await call('/account/me',{cookie:a.cookie})).data.email,'a@example.com');
+ assert.equal((await call('/account/register',{body:{email:'a@example.com',password:'another-long-password'}})).status,409);
+ assert.equal((await call('/account/login',{body:{email:'a@example.com',password:'incorrect-password'}})).status,401);
+ const login=await call('/account/login',{body:{email:'a@example.com',password:'a-long-password-123'}});assert.equal(login.status,200);
+ assert.equal((await call('/v1/stores',{cookie:a.cookie,origin:'https://evil.example',body:{name:'blocked'}})).status,403);
+ const store=(await call('/v1/stores',{cookie:a.cookie,body:{name:'Owned'}})).data;
+ assert.equal((await call('/account/stores',{cookie:a.cookie})).data.stores[0].id,store.id);
+ const b=await call('/account/register',{body:{email:'b@example.com',password:'b-long-password-123'}});
+ const path='/v1/stores/'+store.id+'/products';
+ assert.equal((await call(path,{cookie:b.cookie})).status,401);
+ assert.equal((await call(path,{cookie:a.cookie,method:'PUT',body:{products:[{id:'1',title:'Bag',price:40}]}})).status,200);
+ assert.equal((await call(path,{cookie:a.cookie})).data.products.length,1);
+ const settingsPath='/v1/stores/'+store.id+'/settings';
+ assert.equal((await call(settingsPath,{cookie:b.cookie})).status,401);
+ assert.equal((await call(settingsPath,{cookie:a.cookie,method:'PATCH',body:{name:'My Shop',allowedOrigins:['https://shop.example']}})).status,200);
+ assert.deepEqual((await call(settingsPath,{cookie:a.cookie})).data.allowedOrigins,['https://shop.example']);
+ assert.equal((await call(settingsPath,{key:store.searchKey})).status,401);
+ assert.equal((await call(settingsPath,{cookie:a.cookie,method:'PATCH',body:{name:'My Shop',allowedOrigins:['https://shop.example/path']}})).status,400);
+ assert.equal((await call('/v1/stores/'+store.id+'/search',{cookie:a.cookie,body:{query:'bag'}})).data.total,1,'owned workspace search works independently of allowed storefront origins');
+ assert.equal((await call('/v1/stores/'+store.id+'/search',{key:store.searchKey,origin:'https://unapproved.example',body:{query:'bag'}})).status,403);
+ assert.equal((await call(path,{cookie:a.cookie,origin:'https://evil.example',method:'PUT',body:{products:[{id:'2',title:'Bad',price:10}]}})).status,403);
+ const old=(await call('/v1/stores',{key:admin,body:{name:'Legacy'}})).data;
+ assert.equal((await call('/account/claim-store',{cookie:a.cookie,body:{storeId:old.id,searchKey:old.searchKey,writeKey:'wrong'}})).status,401);
+ assert.equal((await call('/account/claim-store',{cookie:a.cookie,body:{storeId:old.id,searchKey:old.searchKey,writeKey:old.writeKey}})).status,200);
+ assert.equal((await call('/account/claim-store',{cookie:b.cookie,body:{storeId:old.id,searchKey:old.searchKey,writeKey:old.writeKey}})).status,409);
+ assert.equal((await call('/account/logout',{cookie:a.cookie,body:{}})).status,200);assert.equal((await call('/account/me',{cookie:a.cookie})).status,401);
+});

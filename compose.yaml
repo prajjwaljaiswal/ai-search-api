@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4300
+      CODEHENCE_DB_PATH: /data/codehence.sqlite
+      CODEHENCE_PUBLIC_ORIGIN: https://${CODEHENCE_DOMAIN:?Set CODEHENCE_DOMAIN}
+      CODEHENCE_ADMIN_KEY: ${CODEHENCE_ADMIN_KEY:?Set a random admin key}
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_DB_CA: ${SUPABASE_DB_CA:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CODEHENCE_EMBEDDING_MODEL: ${CODEHENCE_EMBEDDING_MODEL:-text-embedding-3-small}
+    volumes:
+      - catalog:/data
+    expose:
+      - '4300'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      CODEHENCE_DOMAIN: ${CODEHENCE_DOMAIN:?Set CODEHENCE_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  catalog:
+  caddy_data:
+  caddy_config:

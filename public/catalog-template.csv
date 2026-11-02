@@ -1,0 +1,3 @@
+id,title,description,price,currency,category,brand,inStock,attributes.color,attributes.size,url,imageUrl
+shoe-001,Trail Running Shoes,"Lightweight shoes, for outdoor runs",129,USD,Shoes,Example,true,green,9,https://example.com/products/shoe-001,
+bag-001,Waterproof Backpack,For rainy commutes,79,USD,Bags,Example,true,black,,https://example.com/products/bag-001,
